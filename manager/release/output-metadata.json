@@ -1,0 +1,20 @@
+{
+  "version": 3,
+  "artifactType": {
+    "type": "APK",
+    "kind": "Directory"
+  },
+  "applicationId": "moe.shizuku.privileged.api",
+  "variantName": "release",
+  "elements": [
+    {
+      "type": "SINGLE",
+      "filters": [],
+      "attributes": [],
+      "versionCode": 1053,
+      "versionName": "13.5.4.r1053.5c86fcf",
+      "outputFile": "shizuku-v13.5.4.r1053.5c86fcf-release.apk"
+    }
+  ],
+  "elementType": "File"
+}
