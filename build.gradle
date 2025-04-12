@@ -11,8 +11,8 @@ buildscript {
 }
 
 plugins {
-    id 'com.android.application' version '8.0.2' apply false
-    id 'com.android.library' version '8.0.2' apply false
+    id 'com.android.application' version '8.9.1' apply false
+    id 'com.android.library' version '8.9.1' apply false
     id 'org.jetbrains.kotlin.jvm' version '1.8.0' apply false
     id 'dev.rikka.tools.autoresconfig' version '1.2.1' apply false
     id 'dev.rikka.tools.materialthemebuilder' version '1.3.3' apply false
@@ -37,12 +37,11 @@ allprojects {
 subprojects {
     plugins.withId("com.android.base") {
         plugins.apply('dev.rikka.tools.refine')
-
         android {
-            compileSdk = 33
+            compileSdk = 35
             defaultConfig {
                 minSdk = 23
-                targetSdk = 33
+                targetSdk = 35
             }
             compileOptions {
                 sourceCompatibility = JavaVersion.VERSION_17
@@ -64,7 +63,7 @@ def gitCommitCount = Integer.parseInt('git rev-list --count HEAD'.execute([], pr
 def baseVersionName = "${api_version_major}.5.4"
 ext {
     minSdkVersion = 23
-    targetSdkVersion = 33
+    targetSdkVersion = 35
     versionCode = gitCommitCount
     versionName = "${baseVersionName}.r${gitCommitCount}.${gitCommitId}"
 }
