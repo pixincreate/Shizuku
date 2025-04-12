@@ -30,7 +30,6 @@ class AppViewHolder(private val binding: AppListItemBinding) : BaseViewHolder<Pa
         val CREATOR = Creator<PackageInfo> { inflater: LayoutInflater, parent: ViewGroup? -> AppViewHolder(AppListItemBinding.inflate(inflater, parent, false)) }
     }
 
-
     private val icon get() = binding.icon
     private val name get() = binding.title
     private val pkg get() = binding.summary
@@ -44,7 +43,7 @@ class AppViewHolder(private val binding: AppListItemBinding) : BaseViewHolder<Pa
 
     private inline val packageName get() = data.packageName
     private inline val ai get() = data.applicationInfo
-    private inline val uid get() = ai.uid
+    private inline val uid get() = ai?.uid ?: 0
 
     private var loadIconJob: Job? = null
 
@@ -83,18 +82,18 @@ class AppViewHolder(private val binding: AppListItemBinding) : BaseViewHolder<Pa
     override fun onBind() {
         val pm = itemView.context.packageManager
         val userId = UserHandleCompat.getUserId(uid)
-        icon.setImageDrawable(ai.loadIcon(pm))
+        icon.setImageDrawable(ai?.loadIcon(pm))
         name.text = if (userId != UserHandleCompat.myUserId()) {
             val userInfo = ShizukuSystemApis.getUserInfo(userId)
-            "${ai.loadLabel(pm)} - ${userInfo.name} ($userId)"
+            "${ai?.loadLabel(pm)} - ${userInfo.name} ($userId)"
         } else {
-            ai.loadLabel(pm)
+            ai?.loadLabel(pm)
         }
-        pkg.text = ai.packageName
+        pkg.text = ai?.packageName
         switchWidget.isChecked = AuthorizationManager.granted(packageName, uid)
-        root.visibility = if (ai.metaData != null && ai.metaData.getBoolean("moe.shizuku.client.V3_REQUIRES_ROOT")) View.VISIBLE else View.GONE
+        root.visibility = if (ai?.metaData != null && ai?.metaData?.getBoolean("moe.shizuku.client.V3_REQUIRES_ROOT") == true) View.VISIBLE else View.GONE
 
-        loadIconJob = AppIconCache.loadIconBitmapAsync(context, ai, ai.uid / 100000, icon)
+        loadIconJob = ai?.let { AppIconCache.loadIconBitmapAsync(context, it, ai?.uid?.div(100000) ?: 0, icon) }
     }
 
     override fun onBind(payloads: List<Any>) {
@@ -104,6 +103,7 @@ class AppViewHolder(private val binding: AppListItemBinding) : BaseViewHolder<Pa
     override fun onRecycle() {
         if (loadIconJob?.isActive == true) {
             loadIconJob?.cancel()
+            loadIconJob = null
         }
     }
 }
