@@ -33,16 +33,18 @@ class AppsViewModel(context: Context) : ViewModel() {
     val grantedCount = _grantedCount as LiveData<Resource<Int>>
 
     fun load() {
-        _packages.value = Resource.loading(null)
-        _grantedCount.value = Resource.loading(0)
-
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val packages = AuthorizationManager.getPackages()
-                _packages.postValue(Resource.success(packages))
-                loadCount()
+                val list: MutableList<PackageInfo> = ArrayList()
+                var count = 0
+                for (pi in AuthorizationManager.getPackages()) {
+                    list.add(pi)
+                    if (AuthorizationManager.granted(pi.packageName, pi.applicationInfo?.uid?:-1)) count++
+                }
+                _packages.postValue(Resource.success(list))
+                _grantedCount.postValue(Resource.success(count))
             } catch (e: CancellationException) {
-                // Do nothing for cancellation
+
             } catch (e: Throwable) {
                 _packages.postValue(Resource.error(e, null))
                 _grantedCount.postValue(Resource.error(e, 0))
@@ -53,17 +55,18 @@ class AppsViewModel(context: Context) : ViewModel() {
     fun loadCount() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val packages = mutableListOf<String>()
+                val list: MutableList<PackageInfo> = ArrayList()
+                val packages: MutableList<String> = ArrayList()
                 for (pi in AuthorizationManager.getPackages()) {
+                    list.add(pi)
                     if (AuthorizationManager.granted(
                             pi.packageName,
-                            pi.applicationInfo?.uid ?: 0
+                            pi.applicationInfo?.uid?:-1
                         )
                     ) packages.add(pi.packageName)
                 }
-                _grantedCount.postValue(Resource.success(packages.size))
             } catch (e: CancellationException) {
-                // Do nothing for cancellation
+
             } catch (e: Throwable) {
                 _packages.postValue(Resource.error(e, null))
                 _grantedCount.postValue(Resource.error(e, 0))

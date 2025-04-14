@@ -12,7 +12,6 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -31,13 +30,12 @@ class SelfStarterService : Service(), LifecycleOwner {
     private val sb = StringBuilder()
     private lateinit var adbMdns: AdbMdns
     private val port = MutableLiveData<Int>()
-    private val lifecycleRegistry = LifecycleRegistry(this)
+    private val lifecycleOwner = LifecycleRegistry(this)
     private val _output = MutableLiveData<Resource<StringBuilder>>()
     val output = _output as LiveData<Resource<StringBuilder>>
 
     override fun onCreate() {
         super.onCreate()
-        lifecycleRegistry.currentState = Lifecycle.State.CREATED
 
         val host = "127.0.0.1"
         val startOnBootWirelessIsEnabled = ShizukuSettings.getPreferences().getBoolean(ShizukuSettings.KEEP_START_ON_BOOT_WIRELESS, false)
@@ -50,14 +48,22 @@ class SelfStarterService : Service(), LifecycleOwner {
 
                 // Observe changes in the port
                 port.observeForever { it ->
-                    // Implementation
+                    if (it > 65535 || it < 1)
+                        return@observeForever
+                    try {
+                        startAdb(host, it)
+                        adbMdns.stop()
+                    } catch (e: Exception) {
+                        adbMdns.stop()
+                        e.printStackTrace()
+                    }
                 }
                 Toast.makeText(this, "Shizuku service has been started!", Toast.LENGTH_SHORT).show()
                 return
             } else {
                 val port = EnvironmentUtils.getAdbTcpPort()
                 if (port > 0) {
-                    // Implementation
+                    startAdb(host, port)
                 }
             }
         }
@@ -67,20 +73,9 @@ class SelfStarterService : Service(), LifecycleOwner {
         return null
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        lifecycleRegistry.currentState = Lifecycle.State.STARTED
-        // Handle start command
-        return START_NOT_STICKY
-    }
 
-    override fun onDestroy() {
-        lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
-        super.onDestroy()
-    }
-
-    // Change from method to property
     override val lifecycle: Lifecycle
-        get() = lifecycleRegistry
+    get() = lifecycleOwner
 
     private fun postResult(throwable: Throwable? = null) {
         if (throwable == null)
@@ -89,7 +84,6 @@ class SelfStarterService : Service(), LifecycleOwner {
             _output.postValue(Resource.error(throwable, sb))
     }
 
-    @OptIn(DelicateCoroutinesApi::class)
     private fun startAdb(host: String, port: Int) {
         sb.append("Starting with wireless adb...").append('\n').append('\n')
         postResult()
