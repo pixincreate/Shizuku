@@ -44,7 +44,7 @@ class AppViewHolder(private val binding: AppListItemBinding) : BaseViewHolder<Pa
 
     private inline val packageName get() = data.packageName
     private inline val ai get() = data.applicationInfo
-    private inline val uid get() = ai.uid
+    private inline val uid get() = ai?.uid ?: -1
 
     private var loadIconJob: Job? = null
 
@@ -83,18 +83,27 @@ class AppViewHolder(private val binding: AppListItemBinding) : BaseViewHolder<Pa
     override fun onBind() {
         val pm = itemView.context.packageManager
         val userId = UserHandleCompat.getUserId(uid)
-        icon.setImageDrawable(ai.loadIcon(pm))
-        name.text = if (userId != UserHandleCompat.myUserId()) {
-            val userInfo = ShizukuSystemApis.getUserInfo(userId)
-            "${ai.loadLabel(pm)} - ${userInfo.name} ($userId)"
-        } else {
-            ai.loadLabel(pm)
-        }
-        pkg.text = ai.packageName
-        switchWidget.isChecked = AuthorizationManager.granted(packageName, uid)
-        root.visibility = if (ai.metaData != null && ai.metaData.getBoolean("moe.shizuku.client.V3_REQUIRES_ROOT")) View.VISIBLE else View.GONE
+        ai?.let { applicationInfo ->
+            icon.setImageDrawable(applicationInfo.loadIcon(pm))
+            name.text = if (userId != UserHandleCompat.myUserId()) {
+                val userInfo = ShizukuSystemApis.getUserInfo(userId)
+                "${applicationInfo.loadLabel(pm)} - ${userInfo.name} ($userId)"
+            } else {
+                applicationInfo.loadLabel(pm)
+            }
+            pkg.text = applicationInfo.packageName
+            switchWidget.isChecked = AuthorizationManager.granted(packageName, uid)
+            root.visibility = if (applicationInfo.metaData != null && applicationInfo.metaData.getBoolean("moe.shizuku.client.V3_REQUIRES_ROOT")) View.VISIBLE else View.GONE
 
-        loadIconJob = AppIconCache.loadIconBitmapAsync(context, ai, ai.uid / 100000, icon)
+            loadIconJob = AppIconCache.loadIconBitmapAsync(context, applicationInfo, applicationInfo.uid / 100000, icon)
+        } ?: run {
+            // Handle the case where ApplicationInfo is null
+            icon.setImageResource(android.R.drawable.sym_def_app_icon)
+            name.text = packageName
+            pkg.text = packageName
+            switchWidget.isChecked = false
+            root.visibility = View.GONE
+        }
     }
 
     override fun onBind(payloads: List<Any>) {
