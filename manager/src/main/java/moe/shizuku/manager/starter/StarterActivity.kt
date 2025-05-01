@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Bundle
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.viewModelScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.topjohnwu.superuser.CallbackList
 import com.topjohnwu.superuser.Shell
@@ -132,12 +133,11 @@ private class ViewModel(context: Context, root: Boolean, host: String?, port: In
         else _output.postValue(Resource.error(throwable, sb))
     }
 
-    @OptIn(DelicateCoroutinesApi::class)
     private fun startRoot() {
         sb.append("Starting with root...").append('\n').append('\n')
         postResult()
 
-        GlobalScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             if (!Shell.rootAccess()) {
                 Shell.getCachedShell()?.close()
                 sb.append('\n').append("Can't open root shell, try again...").append('\n')
@@ -165,7 +165,6 @@ private class ViewModel(context: Context, root: Boolean, host: String?, port: In
         }
     }
 
-    @OptIn(DelicateCoroutinesApi::class)
     private fun startAdb(context: Context, host: String, port: Int) {
         sb.append("Starting with wireless adb...").append('\n').append('\n')
         postResult()
@@ -174,7 +173,7 @@ private class ViewModel(context: Context, root: Boolean, host: String?, port: In
             context = context,
             host = host,
             port = port,
-            coroutineScope = GlobalScope,
+            coroutineScope = viewModelScope,
             onOutput = { outputString ->
                 sb.append(outputString)
                 postResult()
