@@ -2,23 +2,18 @@ package moe.shizuku.manager.starter
 
 import android.content.Context
 import android.os.Bundle
-import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.viewModelScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.topjohnwu.superuser.CallbackList
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import moe.shizuku.manager.AppConstants.EXTRA
-import moe.shizuku.manager.BuildConfig
 import moe.shizuku.manager.R
-import moe.shizuku.manager.ShizukuSettings
-import moe.shizuku.manager.adb.AdbClient
-import moe.shizuku.manager.adb.AdbKey
 import moe.shizuku.manager.adb.AdbKeyException
-import moe.shizuku.manager.adb.PreferenceAdbKeyStore
+import moe.shizuku.manager.adb.AdbWirelessHelper
 import moe.shizuku.manager.app.AppBarActivity
 import moe.shizuku.manager.application
 import moe.shizuku.manager.databinding.StarterActivityBinding
@@ -60,11 +55,11 @@ class StarterActivity : AppBarActivity() {
                 Shizuku.addBinderReceivedListenerSticky(object : Shizuku.OnBinderReceivedListener {
                     override fun onBinderReceived() {
                         Shizuku.removeBinderReceivedListener(this)
-                        viewModel.appendOutput("Service started, this window will be automatically closed in 3 seconds")
+                        viewModel.appendOutput(
+                            "Service started, this window will be automatically closed in 3 seconds"
+                        )
 
-                        window?.decorView?.postDelayed({
-                            if (!isFinishing) finish()
-                        }, 3000)
+                        window?.decorView?.postDelayed({ if (!isFinishing) finish() }, 3000)
                     }
                 })
             } else if (it.status == Status.ERROR) {
@@ -73,22 +68,23 @@ class StarterActivity : AppBarActivity() {
                     is AdbKeyException -> {
                         message = R.string.adb_error_key_store
                     }
+
                     is NotRootedException -> {
                         message = R.string.start_with_root_failed
                     }
+
                     is ConnectException -> {
                         message = R.string.cannot_connect_port
                     }
+
                     is SSLProtocolException -> {
                         message = R.string.adb_pair_required
                     }
                 }
 
                 if (message != 0) {
-                    MaterialAlertDialogBuilder(this)
-                        .setMessage(message)
-                        .setPositiveButton(android.R.string.ok, null)
-                        .show()
+                    MaterialAlertDialogBuilder(this).setMessage(message)
+                        .setPositiveButton(android.R.string.ok, null).show()
                 }
             }
             binding.text1.text = output
@@ -103,20 +99,22 @@ class StarterActivity : AppBarActivity() {
     }
 }
 
-private class ViewModel(context: Context, root: Boolean, host: String?, port: Int) : androidx.lifecycle.ViewModel() {
+private class ViewModel(context: Context, root: Boolean, host: String?, port: Int) :
+    androidx.lifecycle.ViewModel() {
 
     private val sb = StringBuilder()
     private val _output = MutableLiveData<Resource<StringBuilder>>()
+    private val adbWirelessHelper = AdbWirelessHelper()
 
     val output = _output as LiveData<Resource<StringBuilder>>
 
     init {
         try {
             if (root) {
-                //Starter.writeFiles(context)
+                // Starter.writeFiles(context)
                 startRoot()
             } else {
-                startAdb(host!!, port)
+                startAdb(context, host!!, port)
             }
         } catch (e: Throwable) {
             postResult(e)
@@ -129,17 +127,15 @@ private class ViewModel(context: Context, root: Boolean, host: String?, port: In
     }
 
     private fun postResult(throwable: Throwable? = null) {
-        if (throwable == null)
-            _output.postValue(Resource.success(sb))
-        else
-            _output.postValue(Resource.error(throwable, sb))
+        if (throwable == null) _output.postValue(Resource.success(sb))
+        else _output.postValue(Resource.error(throwable, sb))
     }
 
     private fun startRoot() {
         sb.append("Starting with root...").append('\n').append('\n')
         postResult()
 
-        GlobalScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             if (!Shell.rootAccess()) {
                 Shell.getCachedShell()?.close()
                 sb.append('\n').append("Can't open root shell, try again...").append('\n')
@@ -167,62 +163,19 @@ private class ViewModel(context: Context, root: Boolean, host: String?, port: In
         }
     }
 
-    private fun startAdb(host: String, port: Int) {
+    private fun startAdb(context: Context, host: String, port: Int) {
         sb.append("Starting with wireless adb...").append('\n').append('\n')
         postResult()
 
-        GlobalScope.launch(Dispatchers.IO) {
-            val key = try {
-                AdbKey(PreferenceAdbKeyStore(ShizukuSettings.getPreferences()), "shizuku")
-            } catch (e: Throwable) {
-                e.printStackTrace()
-                sb.append('\n').append(Log.getStackTraceString(e))
-
-                postResult(AdbKeyException(e))
-                return@launch
-            }
-
-            AdbClient(host, port, key).runCatching {
-                connect()
-                shellCommand(Starter.sdcardCommand) {
-                    sb.append(String(it))
-                    postResult()
-                }
-                close()
-            }.onFailure {
-                it.printStackTrace()
-
-                sb.append('\n').append(Log.getStackTraceString(it))
-                postResult(it)
-            }
-
-            /* Adb on MIUI Android 11 has no permission to access Android/data.
-               Before MIUI Android 12, we can temporarily use /data/user_de.
-               After that, is better to implement "adb push" and push files directly to /data/local/tmp.
-             */
-            if (sb.contains("/Android/data/${BuildConfig.APPLICATION_ID}/start.sh: Permission denied")) {
-                sb.append('\n')
-                    .appendLine("adb have no permission to access Android/data, how could this possible ?!")
-                    .appendLine("try /data/user_de instead...")
-                    .appendLine()
+        adbWirelessHelper.startShizukuViaAdb(
+            context = context,
+            host = host,
+            port = port,
+            coroutineScope = viewModelScope,
+            onOutput = { outputString ->
+                sb.append(outputString)
                 postResult()
-
-                Starter.writeDataFiles(application, true)
-
-                AdbClient(host, port, key).runCatching {
-                    connect()
-                    shellCommand(Starter.dataCommand) {
-                        sb.append(String(it))
-                        postResult()
-                    }
-                    close()
-                }.onFailure {
-                    it.printStackTrace()
-
-                    sb.append('\n').append(Log.getStackTraceString(it))
-                    postResult(it)
-                }
-            }
-        }
+            },
+            onError = { e -> postResult(e) })
     }
 }
