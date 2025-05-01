@@ -21,7 +21,7 @@
 
     <!-- Home - Wireless Adb -->
     <string name="home_wireless_adb_title"><![CDATA[Start via Wireless debugging]]></string>
-    <string name="home_wireless_adb_description"><![CDATA[On Android 11 or above, you can enable Wireless debugging and start Shizuku directly from your device, without connecting to a computer.<p>Please view the step-by-step guide first.]]></string>
+    <string name="home_wireless_adb_description"><![CDATA[On Android 11 or above, you can enable Wireless debugging and start Shizuku directly from your device, without connecting to a computer.<p>In addition, Shizuku can be started automatically on boot without root if WRITE_SECURE_SETTINGS permission is granted.<p>Please view the step-by-step guide first.]]></string>
     <string name="home_wireless_adb_description_pre_11"><![CDATA[Before Android 11, connecting to a computer is required to enable Wireless debugging.]]></string>
     <string name="home_wireless_adb_view_guide_button">Step-by-step guide</string>
 
@@ -107,13 +107,21 @@ With %1$s, in any terminal app, you can connect to and interact with the shell r
     <string name="settings_user_interface">Appearance</string>
     <string name="settings_black_night_theme">Black night theme</string>
     <string name="settings_black_night_theme_summary">Use the pure black theme if night mode is enabled</string>
-    <string name="settings_startup">Startup</string>
+    <string name="settings_startup">Startup (only one of them can be enabled at a time)</string>
     <string name="settings_translation_contributors">Translation contributors</string>
     <string name="settings_translation">Participate in translation</string>
     <string name="settings_translation_summary">Help us translate %s into your language</string>
     <string name="settings_start_on_boot">Start on boot (root)</string>
+    <string name="settings_start_on_boot_wireless">Start on boot (wireless ADB)</string>
     <string name="settings_start_on_boot_summary">For rooted devices, Shizuku is able to start automatically on boot</string>
+    <string name="settings_start_on_boot_wireless_summary">For rootless devices, Shizuku is able to start automatically on boot with Wireless ADB</string>
     <string name="settings_use_system_color">Use system theme color</string>
+
+    <!-- Wireless Boot -->
+    <string name="wireless_boot_enabled">Wireless ADB auto-start enabled</string>
+    <string name="wireless_boot_component_error">Failed to enable boot component</string>
+    <string name="wireless_boot_permission_tooltip">To automatically start Shizuku on boot with wireless ADB, the WRITE_SECURE_SETTINGS permission must be granted</string>
+    <string name="wireless_boot_wifi_required">This feature requires Wi-Fi connection to work</string>
 
     <!-- About -->
     <string name="action_about">About</string>
@@ -148,10 +156,16 @@ With %1$s, in any terminal app, you can connect to and interact with the shell r
     <string name="permission_warning_template"><![CDATA[Allow <b>%1$s</b> to %2$s?]]></string>
     <string name="grant_dialog_button_allow_always">Allow all the time</string>
     <string name="grant_dialog_button_deny">"Deny"</string>
-
+    
+    <string name="permission_write_secure_settings_required">WRITE_SECURE_SETTINGS permission is required for this feature</string>
+    <string name="permission_write_secure_settings_grant_info">This permission can be granted via ADB using the command:\nadb shell pm grant moe.shizuku.manager android.permission.WRITE_SECURE_SETTINGS</string>
+    <string name="permission_missing">Permission required</string>
+    <string name="permission_disabled_feature">Feature disabled due to missing permission</string>
+    
     <!-- Starter -->
     <string name="starter">Starter</string>
     <string name="starting_root_shell" translatable="false">Starting root shell…</string>
+    <string name="starting_on_wireless_adb" translatable="false">Starting service with wirelessADB…</string>
     <string name="start_with_root_failed">Can\'t start service because root permission is not granted or this device is not rooted.</string>
 
     <!-- Misc -->

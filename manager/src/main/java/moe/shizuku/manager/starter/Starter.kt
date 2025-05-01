@@ -10,7 +10,15 @@ import moe.shizuku.manager.ktx.createDeviceProtectedStorageContextCompat
 import moe.shizuku.manager.ktx.logd
 import moe.shizuku.manager.ktx.loge
 import rikka.core.os.FileUtils
-import java.io.*
+import java.io.BufferedReader
+import java.io.ByteArrayInputStream
+import java.io.DataInputStream
+import java.io.File
+import java.io.FileOutputStream
+import java.io.FileWriter
+import java.io.IOException
+import java.io.InputStreamReader
+import java.io.PrintWriter
 import java.util.zip.ZipFile
 
 object Starter {
@@ -31,12 +39,13 @@ object Starter {
         }
 
         val um = context.getSystemService(UserManager::class.java)!!
-        val unlocked = Build.VERSION.SDK_INT < 24 || um.isUserUnlocked
+        val unlocked = um.isUserUnlocked
         if (!unlocked) {
             throw IllegalStateException("User is locked")
         }
 
-        val filesDir = context.getExternalFilesDir(null) ?: throw IOException("getExternalFilesDir() returns null")
+        val filesDir = context.getExternalFilesDir(null)
+            ?: throw IOException("getExternalFilesDir() returns null")
         val dir = filesDir.parentFile ?: throw IOException("$filesDir parentFile returns null")
         val starter = copyStarter(context, File(dir, "starter"))
         val sh = writeScript(context, File(dir, "start.sh"), starter)
