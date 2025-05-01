@@ -1,7 +1,9 @@
 package moe.shizuku.manager.settings
 
+import android.Manifest
 import android.content.ComponentName
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.text.TextUtils
@@ -10,11 +12,15 @@ import android.view.LayoutInflater
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.content.ContextCompat
 import androidx.preference.*
+import android.util.Log
+import android.widget.Toast
 import androidx.recyclerview.widget.RecyclerView
 import moe.shizuku.manager.R
 import moe.shizuku.manager.ShizukuSettings
 import moe.shizuku.manager.ShizukuSettings.KEEP_START_ON_BOOT
+import moe.shizuku.manager.ShizukuSettings.KEEP_START_ON_BOOT_WIRELESS
 import moe.shizuku.manager.app.ThemeHelper
 import moe.shizuku.manager.app.ThemeHelper.KEY_BLACK_NIGHT_THEME
 import moe.shizuku.manager.app.ThemeHelper.KEY_USE_SYSTEM_COLOR
@@ -32,6 +38,8 @@ import rikka.widget.borderview.BorderRecyclerView
 import java.util.*
 import moe.shizuku.manager.ShizukuSettings.LANGUAGE as KEY_LANGUAGE
 import moe.shizuku.manager.ShizukuSettings.NIGHT_MODE as KEY_NIGHT_MODE
+import androidx.core.content.edit
+import moe.shizuku.manager.ktx.TAG
 
 class SettingsFragment : PreferenceFragmentCompat() {
 
@@ -39,6 +47,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
     private lateinit var nightModePreference: IntegerSimpleMenuPreference
     private lateinit var blackNightThemePreference: TwoStatePreference
     private lateinit var startOnBootPreference: TwoStatePreference
+    private lateinit var startOnBootWirelessPreference: TwoStatePreference
     private lateinit var startupPreference: PreferenceCategory
     private lateinit var translationPreference: Preference
     private lateinit var translationContributorsPreference: Preference
@@ -56,21 +65,62 @@ class SettingsFragment : PreferenceFragmentCompat() {
         nightModePreference = findPreference(KEY_NIGHT_MODE)!!
         blackNightThemePreference = findPreference(KEY_BLACK_NIGHT_THEME)!!
         startOnBootPreference = findPreference(KEEP_START_ON_BOOT)!!
+        startOnBootWirelessPreference = findPreference(KEEP_START_ON_BOOT_WIRELESS)!!
         startupPreference = findPreference("startup")!!
         translationPreference = findPreference("translation")!!
         translationContributorsPreference = findPreference("translation_contributors")!!
         useSystemColorPreference = findPreference(KEY_USE_SYSTEM_COLOR)!!
 
-        val componentName = ComponentName(context.packageName, BootCompleteReceiver::class.java.name)
+        val componentName =
+            ComponentName(context.packageName, BootCompleteReceiver::class.java.name)
+        // Initialize toggles based on saved preferences
+        updatePreferenceStates(componentName)
 
-        startOnBootPreference.isChecked = context.packageManager.isComponentEnabled(componentName)
         startOnBootPreference.onPreferenceChangeListener =
-            Preference.OnPreferenceChangeListener { _: Preference?, newValue: Any ->
+            Preference.OnPreferenceChangeListener { _, newValue ->
                 if (newValue is Boolean) {
-                    context.packageManager.setComponentEnabled(componentName, newValue)
-                    context.packageManager.isComponentEnabled(componentName) == newValue
+                    if (newValue) {
+                        // These two options are mutually exclusive. So, disable the wireless option
+                        startOnBootWirelessPreference.isChecked = false
+                        savePreference(KEEP_START_ON_BOOT_WIRELESS, false)
+                    }
+                    toggleBootComponent(
+                        componentName,
+                        KEEP_START_ON_BOOT,
+                        newValue || startOnBootPreference.isChecked
+                    )
                 } else false
             }
+
+        startOnBootWirelessPreference.onPreferenceChangeListener =
+            Preference.OnPreferenceChangeListener { _, newValue ->
+                val hasSecurePermission = ContextCompat.checkSelfPermission(
+                    requireContext(), Manifest.permission.WRITE_SECURE_SETTINGS
+                ) == PackageManager.PERMISSION_GRANTED
+                if (newValue is Boolean) {
+                    if (newValue) {
+                        // Check for permission
+                        if (!hasSecurePermission) {
+                            Toast.makeText(
+                                context,
+                                R.string.permission_write_secure_settings_required,
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            return@OnPreferenceChangeListener false
+                        }
+
+                        // Disable the root option because, mutual exclusivity
+                        startOnBootPreference.isChecked = false
+                        savePreference(KEEP_START_ON_BOOT, false)
+                    }
+                    toggleBootComponent(
+                        componentName,
+                        KEEP_START_ON_BOOT_WIRELESS,
+                        newValue || startOnBootPreference.isChecked
+                    )
+                } else false
+            }
+
         languagePreference.onPreferenceChangeListener =
             Preference.OnPreferenceChangeListener { _: Preference?, newValue: Any ->
                 if (newValue is String) {
@@ -125,8 +175,9 @@ class SettingsFragment : PreferenceFragmentCompat() {
             useSystemColorPreference.isVisible = false
         }
 
-        translationPreference.summary =
-            context.getString(R.string.settings_translation_summary, context.getString(R.string.app_name))
+        translationPreference.summary = context.getString(
+            R.string.settings_translation_summary, context.getString(R.string.app_name)
+        )
         translationPreference.setOnPreferenceClickListener {
             CustomTabsHelper.launchUrlOrCopy(context, context.getString(R.string.translation_url))
             true
@@ -141,17 +192,18 @@ class SettingsFragment : PreferenceFragmentCompat() {
     }
 
     override fun onCreateRecyclerView(
-        inflater: LayoutInflater,
-        parent: ViewGroup,
-        savedInstanceState: Bundle?
+        inflater: LayoutInflater, parent: ViewGroup, savedInstanceState: Bundle?
     ): RecyclerView {
-        val recyclerView = super.onCreateRecyclerView(inflater, parent, savedInstanceState) as BorderRecyclerView
+        val recyclerView =
+            super.onCreateRecyclerView(inflater, parent, savedInstanceState) as BorderRecyclerView
         recyclerView.fixEdgeEffect()
         recyclerView.addEdgeSpacing(bottom = 8f, unit = TypedValue.COMPLEX_UNIT_DIP)
 
         val lp = recyclerView.layoutParams
         if (lp is FrameLayout.LayoutParams) {
-            lp.rightMargin = recyclerView.context.resources.getDimension(R.dimen.rd_activity_horizontal_margin).toInt()
+            lp.rightMargin =
+                recyclerView.context.resources.getDimension(R.dimen.rd_activity_horizontal_margin)
+                    .toInt()
             lp.leftMargin = lp.rightMargin
         }
 
@@ -177,15 +229,12 @@ class SettingsFragment : PreferenceFragmentCompat() {
             }
 
             val locale = Locale.forLanguageTag(displayLocale.toString())
-            val localeName = if (!TextUtils.isEmpty(locale.script))
-                locale.getDisplayScript(locale)
-            else
-                locale.getDisplayName(locale)
+            val localeName = if (!TextUtils.isEmpty(locale.script)) locale.getDisplayScript(locale)
+            else locale.getDisplayName(locale)
 
-            val localizedLocaleName = if (!TextUtils.isEmpty(locale.script))
-                locale.getDisplayScript(currentLocale)
-            else
-                locale.getDisplayName(currentLocale)
+            val localizedLocaleName =
+                if (!TextUtils.isEmpty(locale.script)) locale.getDisplayScript(currentLocale)
+                else locale.getDisplayName(currentLocale)
 
             localizedLocales.add(
                 if (index != currentLocaleIndex) {
@@ -202,6 +251,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
             TextUtils.isEmpty(currentLocaleTag) || "SYSTEM" == currentLocaleTag -> {
                 getString(R.string.follow_system)
             }
+
             currentLocaleIndex != -1 -> {
                 val localizedLocale = localizedLocales[currentLocaleIndex]
                 val newLineIndex = localizedLocale.indexOf('\n')
@@ -211,9 +261,49 @@ class SettingsFragment : PreferenceFragmentCompat() {
                     localizedLocale.subSequence(0, newLineIndex).toString()
                 }
             }
+
             else -> {
                 ""
             }
         }
+    }
+
+    private fun savePreference(key: String, value: Boolean) {
+        ShizukuSettings.getPreferences().edit() { putBoolean(key, value) }
+    }
+
+    private fun updatePreferenceStates(componentName: ComponentName) {
+        val isComponentEnabled = context?.packageManager?.isComponentEnabled(componentName) == true
+        val isWirelessBootEnabled =
+            ShizukuSettings.getPreferences().getBoolean(KEEP_START_ON_BOOT_WIRELESS, false)
+        val hasSecurePermission = ContextCompat.checkSelfPermission(
+            requireContext(), Manifest.permission.WRITE_SECURE_SETTINGS
+        ) == PackageManager.PERMISSION_GRANTED
+
+        startOnBootPreference.isChecked = isComponentEnabled && !isWirelessBootEnabled
+        startOnBootWirelessPreference.isChecked =
+            isComponentEnabled && isWirelessBootEnabled && hasSecurePermission
+    }
+
+    private fun toggleBootComponent(
+        componentName: ComponentName, key: String, enabled: Boolean
+    ): Boolean {
+        savePreference(key, enabled)
+
+        try {
+            context?.packageManager?.setComponentEnabled(componentName, enabled)
+
+            val isEnabled = context?.packageManager?.isComponentEnabled(componentName) == enabled
+            if (!isEnabled) {
+                Log.e(TAG, "Failed to set component state: $componentName to $enabled")
+                return false
+            }
+
+        } catch (e: Exception) {
+            Log.e(TAG, getString(R.string.wireless_boot_component_error), e)
+            return false
+        }
+
+        return true
     }
 }

@@ -31,12 +31,13 @@ object Starter {
         }
 
         val um = context.getSystemService(UserManager::class.java)!!
-        val unlocked = Build.VERSION.SDK_INT < 24 || um.isUserUnlocked
+        val unlocked = false || um.isUserUnlocked
         if (!unlocked) {
             throw IllegalStateException("User is locked")
         }
 
-        val filesDir = context.getExternalFilesDir(null) ?: throw IOException("getExternalFilesDir() returns null")
+        val filesDir = context.getExternalFilesDir(null)
+            ?: throw IOException("getExternalFilesDir() returns null")
         val dir = filesDir.parentFile ?: throw IOException("$filesDir parentFile returns null")
         val starter = copyStarter(context, File(dir, "starter"))
         val sh = writeScript(context, File(dir, "start.sh"), starter)
