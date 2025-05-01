@@ -7,14 +7,21 @@ import android.os.IBinder
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
-import androidx.lifecycle.*
-import java.net.ConnectException
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.Observer
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import moe.shizuku.manager.AppConstants
-import moe.shizuku.manager.adb.*
+import moe.shizuku.manager.adb.AdbKeyException
+import moe.shizuku.manager.adb.AdbMdns
+import moe.shizuku.manager.adb.AdbWirelessHelper
 import moe.shizuku.manager.utils.EnvironmentUtils
 import rikka.shizuku.Shizuku
+import java.net.ConnectException
 
 class SelfStarterService : Service(), LifecycleOwner {
 
@@ -26,19 +33,17 @@ class SelfStarterService : Service(), LifecycleOwner {
     private var adbMdns: AdbMdns? = null
     private val adbWirelessHelper = AdbWirelessHelper()
 
-    private val portObserver =
-        Observer<Int> { p ->
-            if (p in 1..65535) {
-                Log.i(
-                    AppConstants.TAG,
-                    "Discovered adb port via mDNS: $p, starting Shizuku directly"
-                )
-                // Do not launch activity, start ADB connection directly
-                startShizukuViaAdb("127.0.0.1", p)
-            } else {
-                Log.w(AppConstants.TAG, "mDNS returned invalid port: $p")
-            }
+    private val portObserver = Observer<Int> { p ->
+        if (p in 1..65535) {
+            Log.i(
+                AppConstants.TAG, "Discovered adb port via mDNS: $p, starting Shizuku directly"
+            )
+            // Do not launch activity, start ADB connection directly
+            startShizukuViaAdb("127.0.0.1", p)
+        } else {
+            Log.w(AppConstants.TAG, "mDNS returned invalid port: $p")
         }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -112,35 +117,26 @@ class SelfStarterService : Service(), LifecycleOwner {
             onError = { e ->
                 lifecycleScope.launch(Dispatchers.Main) {
                     when (e) {
-                        is AdbKeyException ->
-                            Toast.makeText(
-                                applicationContext,
-                                "ADB Key error during Shizuku start",
-                                Toast.LENGTH_LONG
-                            )
-                                .show()
+                        is AdbKeyException -> Toast.makeText(
+                            applicationContext,
+                            "ADB Key error during Shizuku start",
+                            Toast.LENGTH_LONG
+                        ).show()
 
-                        is ConnectException ->
-                            Toast.makeText(
-                                applicationContext,
-                                "ADB Connection failed to $host:$port",
-                                Toast.LENGTH_LONG
-                            )
-                                .show()
+                        is ConnectException -> Toast.makeText(
+                            applicationContext,
+                            "ADB Connection failed to $host:$port",
+                            Toast.LENGTH_LONG
+                        ).show()
 
-                        else ->
-                            Toast.makeText(
-                                applicationContext,
-                                "Error: ${e.message}",
-                                Toast.LENGTH_LONG
-                            )
-                                .show()
+                        else -> Toast.makeText(
+                            applicationContext, "Error: ${e.message}", Toast.LENGTH_LONG
+                        ).show()
                     }
                     stopSelf()
                 }
             },
-            onSuccess = { lifecycleScope.launch(Dispatchers.Main) { stopSelf() } }
-        )
+            onSuccess = { lifecycleScope.launch(Dispatchers.Main) { stopSelf() } })
     }
 
     override fun onDestroy() {

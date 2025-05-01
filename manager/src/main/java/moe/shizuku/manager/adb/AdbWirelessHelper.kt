@@ -14,11 +14,13 @@ import kotlinx.coroutines.launch
 import moe.shizuku.manager.AppConstants
 import moe.shizuku.manager.BuildConfig
 import moe.shizuku.manager.ShizukuSettings
-import moe.shizuku.manager.ktx.TAG
 import moe.shizuku.manager.starter.Starter
 import moe.shizuku.manager.starter.StarterActivity
 
 class AdbWirelessHelper {
+
+    private val adbWifiKey: String = "adb_wifi_enabled"
+
     fun validateThenEnableWirelessAdb(contentResolver: ContentResolver, context: Context): Boolean {
         val connectivityManager =
             context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -36,7 +38,7 @@ class AdbWirelessHelper {
     private fun enableWirelessADB(contentResolver: ContentResolver, context: Context) {
         // Enable wireless ADB
         try {
-            Settings.Global.putInt(contentResolver, "adb_wifi_enabled", 1)
+            Settings.Global.putInt(contentResolver, adbWifiKey, 1)
             Log.i(AppConstants.TAG, "Wireless Debugging enabled via secure setting.")
             Toast.makeText(context, "Wireless Debugging enabled", Toast.LENGTH_SHORT).show()
         } catch (se: SecurityException) {

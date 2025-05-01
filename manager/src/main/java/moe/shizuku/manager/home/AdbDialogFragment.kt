@@ -6,7 +6,6 @@ import android.content.DialogInterface
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import android.os.SystemProperties
 import android.provider.Settings
 import android.view.LayoutInflater
 import androidx.annotation.RequiresApi
@@ -19,9 +18,7 @@ import moe.shizuku.manager.R
 import moe.shizuku.manager.adb.AdbMdns
 import moe.shizuku.manager.adb.AdbWirelessHelper
 import moe.shizuku.manager.databinding.AdbDialogBinding
-import moe.shizuku.manager.starter.StarterActivity
 import moe.shizuku.manager.utils.EnvironmentUtils
-import java.net.InetAddress
 
 @RequiresApi(Build.VERSION_CODES.R)
 class AdbDialogFragment : DialogFragment() {

@@ -10,7 +10,15 @@ import moe.shizuku.manager.ktx.createDeviceProtectedStorageContextCompat
 import moe.shizuku.manager.ktx.logd
 import moe.shizuku.manager.ktx.loge
 import rikka.core.os.FileUtils
-import java.io.*
+import java.io.BufferedReader
+import java.io.ByteArrayInputStream
+import java.io.DataInputStream
+import java.io.File
+import java.io.FileOutputStream
+import java.io.FileWriter
+import java.io.IOException
+import java.io.InputStreamReader
+import java.io.PrintWriter
 import java.util.zip.ZipFile
 
 object Starter {
