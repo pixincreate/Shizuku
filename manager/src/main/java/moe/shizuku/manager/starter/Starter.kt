@@ -31,7 +31,7 @@ object Starter {
         }
 
         val um = context.getSystemService(UserManager::class.java)!!
-        val unlocked = false || um.isUserUnlocked
+        val unlocked = um.isUserUnlocked
         if (!unlocked) {
             throw IllegalStateException("User is locked")
         }
