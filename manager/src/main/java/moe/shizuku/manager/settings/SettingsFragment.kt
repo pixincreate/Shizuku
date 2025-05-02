@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemProperties
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.LayoutInflater
@@ -39,6 +40,7 @@ import java.util.*
 import moe.shizuku.manager.ShizukuSettings.LANGUAGE as KEY_LANGUAGE
 import moe.shizuku.manager.ShizukuSettings.NIGHT_MODE as KEY_NIGHT_MODE
 import androidx.core.content.edit
+import moe.shizuku.manager.ShizukuSettings.ADB_ROOT
 import moe.shizuku.manager.ktx.TAG
 
 class SettingsFragment : PreferenceFragmentCompat() {
@@ -48,6 +50,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
     private lateinit var blackNightThemePreference: TwoStatePreference
     private lateinit var startOnBootPreference: TwoStatePreference
     private lateinit var startOnBootWirelessPreference: TwoStatePreference
+    private lateinit var adbRoot: TwoStatePreference
     private lateinit var startupPreference: PreferenceCategory
     private lateinit var translationPreference: Preference
     private lateinit var translationContributorsPreference: Preference
@@ -66,10 +69,14 @@ class SettingsFragment : PreferenceFragmentCompat() {
         blackNightThemePreference = findPreference(KEY_BLACK_NIGHT_THEME)!!
         startOnBootPreference = findPreference(KEEP_START_ON_BOOT)!!
         startOnBootWirelessPreference = findPreference(KEEP_START_ON_BOOT_WIRELESS)!!
+        adbRoot = findPreference(ADB_ROOT)!!
         startupPreference = findPreference("startup")!!
         translationPreference = findPreference("translation")!!
         translationContributorsPreference = findPreference("translation_contributors")!!
         useSystemColorPreference = findPreference(KEY_USE_SYSTEM_COLOR)!!
+
+        // User builds do not have rooted debugging
+        adbRoot.isVisible = !Build.TYPE.equals("user", ignoreCase = true)
 
         val componentName =
             ComponentName(context.packageName, BootCompleteReceiver::class.java.name)
@@ -119,6 +126,12 @@ class SettingsFragment : PreferenceFragmentCompat() {
                         newValue || startOnBootPreference.isChecked
                     )
                 } else false
+            }
+
+        adbRoot.onPreferenceChangeListener =
+            Preference.OnPreferenceChangeListener { _: Preference?, newValue: Any ->
+                if (newValue is Boolean) true
+                else false
             }
 
         languagePreference.onPreferenceChangeListener =
