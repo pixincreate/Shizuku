@@ -13,7 +13,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import moe.shizuku.manager.AppConstants
 import moe.shizuku.manager.BuildConfig
-import moe.shizuku.manager.ShizukuSettings
+import moe.shizuku.manager.ShizukuSettings.ADB_ROOT
+import moe.shizuku.manager.ShizukuSettings.getPreferences
 import moe.shizuku.manager.starter.Starter
 import moe.shizuku.manager.starter.StarterActivity
 
@@ -75,7 +76,7 @@ class AdbWirelessHelper {
 
                 val key = try {
                     AdbKey(
-                        PreferenceAdbKeyStore(ShizukuSettings.getPreferences()), "shizuku"
+                        PreferenceAdbKeyStore(getPreferences()), "shizuku"
                     )
                 } catch (e: Throwable) {
                     Log.e(AppConstants.TAG, "ADB Key error", e)
@@ -84,6 +85,22 @@ class AdbWirelessHelper {
                 }
 
                 val commandOutput = StringBuilder()
+
+                if (getPreferences().getBoolean(ADB_ROOT, false)) {
+                    AdbClient(host, port, key).use { client ->
+                        client.connect()
+
+                        val rootExecution =
+                            if (client.root()) "ADB root command executed successfully."
+                            else "ADB root command failed.\n"
+
+                        commandOutput.append(rootExecution).append("\n")
+                        onOutput(commandOutput.toString())
+                        Log.d(
+                            AppConstants.TAG, "Shizuku start output chunk: $rootExecution"
+                        )
+                    }
+                }
 
                 AdbClient(host, port, key).use { client ->
                     try {
@@ -118,6 +135,23 @@ class AdbWirelessHelper {
                             onOutput(miuiMessage)
 
                             Starter.writeDataFiles(context, true) // Write to data with permissions
+
+                            if (getPreferences().getBoolean(ADB_ROOT, false)) {
+                                AdbClient(host, port, key).use { client ->
+                                    client.connect()
+
+                                    val rootExecution =
+                                        if (client.root()) "ADB root command executed successfully."
+                                        else "ADB root command failed.\n"
+
+                                    commandOutput.append(rootExecution).append("\n")
+                                    onOutput(commandOutput.toString())
+                                    Log.d(
+                                        AppConstants.TAG,
+                                        "Shizuku start output chunk: $rootExecution"
+                                    )
+                                }
+                            }
 
                             AdbClient(host, port, key).use { fallbackClient ->
                                 fallbackClient.connect()
