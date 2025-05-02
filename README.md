@@ -5,6 +5,12 @@
 THIS IS A **FORK** OF SHIZUKU. IF YOU'RE LOOKING FOR SHIZUKU FROM RIKKA, THIS IS NOT THE PLACE.
 VISIT THE OFFICIAL REPO [**_HERE_**](https://github.com/RikkaApps/Shizuku)
 
+## Additional Features that this fork provides
+
+- **Auto-start**: This fork provides an auto-start feature on root-less devices that allows the Shizuku service to start automatically on boot. This is useful for users who want to ensure that the service is always running without manual intervention.
+- **Rooted-Debugging**: This fork allows you to debug the Shizuku service while it is running with root privileges. This feature is only available on `userdebug` and `eng` builds of Android.
+- **Stealth**: Prevent Shizuku from being detected by other apps. This is done by randomizing the Shizuku tmp folder name and also by deleting the starter file after the service is started.
+
 ### Usage of auto-start
 
 - Follow the instructions for setting up Shizuku through Wireless ADB by pairing the app

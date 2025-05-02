@@ -13,7 +13,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import moe.shizuku.manager.AppConstants
 import moe.shizuku.manager.BuildConfig
-import moe.shizuku.manager.ShizukuSettings
+import moe.shizuku.manager.ShizukuSettings.ADB_ROOT
+import moe.shizuku.manager.ShizukuSettings.getPreferences
 import moe.shizuku.manager.starter.Starter
 import moe.shizuku.manager.starter.StarterActivity
 
@@ -59,6 +60,30 @@ class AdbWirelessHelper {
         context.startActivity(intent)
     }
 
+    private fun executeAdbRootIfNeeded(
+        host: String,
+        port: Int,
+        key: AdbKey,
+        commandOutput: StringBuilder,
+        onOutput: (String) -> Unit
+    ): Boolean {
+        if (!getPreferences().getBoolean(ADB_ROOT, false)) {
+            return false
+        }
+
+        AdbClient(host, port, key).use { client ->
+            client.connect()
+
+            val rootExecution = if (client.root()) "ADB root command executed successfully."
+            else "ADB root command failed.\n"
+
+            commandOutput.append(rootExecution).append("\n")
+            onOutput(commandOutput.toString())
+            Log.d(AppConstants.TAG, "Shizuku start output chunk: $rootExecution")
+            return rootExecution.contains("successfully")
+        }
+    }
+
     fun startShizukuViaAdb(
         context: Context,
         host: String,
@@ -75,7 +100,7 @@ class AdbWirelessHelper {
 
                 val key = try {
                     AdbKey(
-                        PreferenceAdbKeyStore(ShizukuSettings.getPreferences()), "shizuku"
+                        PreferenceAdbKeyStore(getPreferences()), "shizuku"
                     )
                 } catch (e: Throwable) {
                     Log.e(AppConstants.TAG, "ADB Key error", e)
@@ -84,6 +109,8 @@ class AdbWirelessHelper {
                 }
 
                 val commandOutput = StringBuilder()
+
+                executeAdbRootIfNeeded(host, port, key, commandOutput, onOutput)
 
                 AdbClient(host, port, key).use { client ->
                     try {
@@ -118,6 +145,8 @@ class AdbWirelessHelper {
                             onOutput(miuiMessage)
 
                             Starter.writeDataFiles(context, true) // Write to data with permissions
+
+                            executeAdbRootIfNeeded(host, port, key, commandOutput, onOutput)
 
                             AdbClient(host, port, key).use { fallbackClient ->
                                 fallbackClient.connect()
