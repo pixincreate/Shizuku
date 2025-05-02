@@ -390,8 +390,9 @@ class SettingsFragment : PreferenceFragmentCompat() {
         MaterialAlertDialogBuilder(context).setTitle(R.string.permission_required).setMessage(
                 HtmlCompat.fromHtml(
                     """
-                <h3>${getString(R.string.permission_write_secure_settings_required)}</h3>
-                <p>${getString(R.string.permission_write_secure_settings_grant_info)}</p>
+                <p>${getString(R.string.permission_write_secure_settings_required)}</p>
+                <h3>Warning</h3>
+                <p><tt>WRITE_SECURE_SETTINGS</tt> is a very sensitive permission and enable it only if you know what you're doing as the permission allows the application to read or write the secure system settings.</p>
                 """.trimIndent()
                 )
             ).setPositiveButton(R.string.permission_grant_automatically) { _, _ ->
