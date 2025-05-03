@@ -69,6 +69,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
     private lateinit var translationPreference: Preference
     private lateinit var translationContributorsPreference: Preference
     private lateinit var useSystemColorPreference: TwoStatePreference
+    private lateinit var bootComponentName: ComponentName
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         val context = requireContext()
@@ -78,6 +79,8 @@ class SettingsFragment : PreferenceFragmentCompat() {
         preferenceManager.sharedPreferencesMode = Context.MODE_PRIVATE
         setPreferencesFromResource(R.xml.settings, null)
 
+        bootComponentName =
+            ComponentName(context.packageName, BootCompleteReceiver::class.java.name)
         languagePreference = findPreference(KEY_LANGUAGE)!!
         nightModePreference = findPreference(KEY_NIGHT_MODE)!!
         blackNightThemePreference = findPreference(KEY_BLACK_NIGHT_THEME)!!
@@ -96,10 +99,8 @@ class SettingsFragment : PreferenceFragmentCompat() {
             ) || SystemProperties.getBoolean("ro.debuggable", false)
         adbRoot.isVisible = isUserDebugBuild
 
-        val componentName =
-            ComponentName(context.packageName, BootCompleteReceiver::class.java.name)
         // Initialize toggles based on saved preferences
-        updatePreferenceStates(componentName)
+        updatePreferenceStates()
 
         startOnBootPreference.onPreferenceChangeListener =
             Preference.OnPreferenceChangeListener { _, newValue ->
@@ -110,7 +111,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
                         savePreference(KEEP_START_ON_BOOT_WIRELESS, false)
                     }
                     toggleBootComponent(
-                        componentName, KEEP_START_ON_BOOT, newValue
+                        KEEP_START_ON_BOOT, newValue
                     )
                 } else false
             }
@@ -132,10 +133,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
                                 savePreference(KEEP_START_ON_BOOT, false)
 
                                 return@OnPreferenceChangeListener toggleBootComponent(
-                                    ComponentName(
-                                        requireContext().packageName,
-                                        BootCompleteReceiver::class.java.name
-                                    ), KEEP_START_ON_BOOT_WIRELESS, true
+                                    KEEP_START_ON_BOOT_WIRELESS, true
                                 )
                             }
 
@@ -147,19 +145,16 @@ class SettingsFragment : PreferenceFragmentCompat() {
                         savePreference(KEEP_START_ON_BOOT, false)
                     }
                     toggleBootComponent(
-                        ComponentName(
-                            requireContext().packageName, BootCompleteReceiver::class.java.name
-                        ), KEEP_START_ON_BOOT_WIRELESS, newValue
+                        KEEP_START_ON_BOOT_WIRELESS, newValue
                     )
                 } else false
             }
 
 
-        adbRoot.onPreferenceChangeListener =
-            Preference.OnPreferenceChangeListener { _: Preference?, newValue: Any ->
-                if (newValue is Boolean) true
-                else false
-            }
+        adbRoot.onPreferenceChangeListener = Preference.OnPreferenceChangeListener { _, newValue ->
+            if (newValue is Boolean) true
+            else false
+        }
 
         languagePreference.onPreferenceChangeListener =
             Preference.OnPreferenceChangeListener { _: Preference?, newValue: Any ->
@@ -255,11 +250,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
         tryToGrantSecureSettingsPermission()
 
-        updatePreferenceStates(
-            ComponentName(
-                requireContext().packageName, BootCompleteReceiver::class.java.name
-            )
-        )
+        updatePreferenceStates()
     }
 
     private fun setupLocalePreference() {
@@ -290,7 +281,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
             localizedLocales.add(
                 if (index != currentLocaleIndex) {
-                    "$localeName<br><small>$localizedLocaleName<small>".toHtml()
+                    "$localeName<br><small>$localizedLocaleName</small>".toHtml()
                 } else {
                     localizedLocaleName
                 }
@@ -324,32 +315,45 @@ class SettingsFragment : PreferenceFragmentCompat() {
         ShizukuSettings.getPreferences().edit() { putBoolean(key, value) }
     }
 
-    private fun updatePreferenceStates(componentName: ComponentName) {
-        val isComponentEnabled = context?.packageManager?.isComponentEnabled(componentName) == true
+    private fun updatePreferenceStates() {
+        val pm = requireContext().packageManager
+        val isComponentEnabled = pm.isComponentEnabled(bootComponentName) == true
         val isWirelessBootEnabled =
             ShizukuSettings.getPreferences().getBoolean(KEEP_START_ON_BOOT_WIRELESS, false)
+        val hasPermission = hasSecureSettingsPermission()
 
         startOnBootPreference.isChecked = isComponentEnabled && !isWirelessBootEnabled
         startOnBootWirelessPreference.isChecked =
-            isComponentEnabled && isWirelessBootEnabled && hasSecureSettingsPermission()
+            isComponentEnabled && isWirelessBootEnabled && hasPermission
+
+        if (isWirelessBootEnabled && (!isComponentEnabled || !hasPermission)) {
+            startOnBootWirelessPreference.isChecked = false
+            savePreference(KEEP_START_ON_BOOT_WIRELESS, false)
+        }
     }
 
     private fun toggleBootComponent(
-        componentName: ComponentName, key: String, enabled: Boolean
+        key: String, enabled: Boolean
     ): Boolean {
         savePreference(key, enabled)
 
         try {
-            context?.packageManager?.setComponentEnabled(componentName, enabled)
+            val pm = context?.packageManager
+            pm?.setComponentEnabled(bootComponentName, enabled)
 
-            val isEnabled = context?.packageManager?.isComponentEnabled(componentName) == enabled
+            val isEnabled = pm?.isComponentEnabled(bootComponentName) == enabled
             if (!isEnabled) {
-                Log.e(TAG, "Failed to set component state: $componentName to $enabled")
+                Log.e(
+                    TAG, "Failed to verify component state change: $bootComponentName to $enabled"
+                )
                 return false
             }
 
         } catch (e: Exception) {
-            Log.e(TAG, getString(R.string.wireless_boot_component_error), e)
+            Log.e(TAG, "Error setting component state: $bootComponentName", e)
+            Toast.makeText(
+                requireContext(), R.string.wireless_boot_component_error, Toast.LENGTH_SHORT
+            ).show()
             return false
         }
 
@@ -461,12 +465,11 @@ class SettingsFragment : PreferenceFragmentCompat() {
             try {
                 val success = kotlin.runCatching {
                     grantSecureSettingsWithShizuku()
-                    Thread.sleep(100)
+                    Thread.sleep(200)
                     hasSecureSettingsPermission()
-                }.getOrElse { e ->
+                }.onFailure { e ->
                     Log.e(TAG, "Error auto-granting permission", e)
-                    false
-                }
+                }.getOrDefault(false)
 
                 if (success) {
                     ShizukuSettings.getPreferences().edit {
@@ -479,6 +482,8 @@ class SettingsFragment : PreferenceFragmentCompat() {
                         ).show()
                     }
                     return true
+                } else {
+                    Log.w(TAG, "Auto-grant attempt finished, but permission still not granted.")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to grant permission", e)
@@ -491,12 +496,17 @@ class SettingsFragment : PreferenceFragmentCompat() {
         try {
             if (!Shizuku.pingBinder()) {
                 Log.w(TAG, "Shizuku service not available")
-                throw IllegalStateException("Shizuku service not available")
+                throw IllegalStateException("Shizuku service not available for granting permission")
             }
 
             val uid = Process.myUid()
             val userHandle = UserHandle.getUserHandleForUid(uid)
-            val userId = userHandle.toString().replace("UserHandle{", "").replace("}", "").toInt()
+            val userId = try {
+                userHandle.toString().substringAfter("{").substringBefore("}").toInt()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to get user ID from UserHandle", e)
+                throw IllegalStateException("Failed to parse user ID", e)
+            }
 
             Log.i(TAG, "Attempting to grant WRITE_SECURE_SETTINGS for user ID: $userId (UID: $uid)")
 
