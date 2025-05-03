@@ -159,10 +159,15 @@ With %1$s, in any terminal app, you can connect to and interact with the shell r
     <string name="grant_dialog_button_allow_always">Allow all the time</string>
     <string name="grant_dialog_button_deny">"Deny"</string>
 
-    <string name="permission_write_secure_settings_required">WRITE_SECURE_SETTINGS permission is required for this feature</string>
+    <string name="start_shizuku_first">Please start Shizuku service first. Returning to the main screen.</string>
+    <string name="permission_write_secure_settings_required">The Start on Boot (Wireless ADB) feature requires the WRITE_SECURE_SETTINGS permission to be granted.</string>
     <string name="permission_write_secure_settings_grant_info">This permission can be granted via ADB using the command:\nadb shell pm grant moe.shizuku.manager android.permission.WRITE_SECURE_SETTINGS</string>
-    <string name="permission_missing">Permission required</string>
+    <string name="permission_required">Permission required</string>
     <string name="permission_disabled_feature">Feature disabled due to missing permission</string>
+    <string name="permission_grant_automatically">Automatic Setup</string>
+    <string name="permission_grant_manually">Manual Setup</string>
+    <string name="permission_granted">Permission granted successfully</string>
+    <string name="permission_grant_failed">Failed to grant permission</string>
 
     <!-- Starter -->
     <string name="starter">Starter</string>
