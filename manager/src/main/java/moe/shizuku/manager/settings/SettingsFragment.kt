@@ -1,13 +1,17 @@
 package moe.shizuku.manager.settings
 
+import android.os.Process
 import android.Manifest
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.UserInfo
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemProperties
+import android.os.UserHandle
+import android.os.UserManager
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.LayoutInflater
@@ -48,8 +52,10 @@ import moe.shizuku.manager.ShizukuSettings.PENDING_SECURE_SETTINGS_GRANT
 import moe.shizuku.manager.ktx.TAG
 import moe.shizuku.manager.utils.ShizukuSystemApis
 import rikka.core.util.ClipboardUtils
+import rikka.hidden.compat.UserManagerApis
 import rikka.html.text.HtmlCompat
 import rikka.shizuku.Shizuku
+import kotlin.reflect.typeOf
 
 class SettingsFragment : PreferenceFragmentCompat() {
 
@@ -104,9 +110,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
                         savePreference(KEEP_START_ON_BOOT_WIRELESS, false)
                     }
                     toggleBootComponent(
-                        componentName,
-                        KEEP_START_ON_BOOT,
-                        newValue
+                        componentName, KEEP_START_ON_BOOT, newValue
                     )
                 } else false
             }
@@ -119,39 +123,22 @@ class SettingsFragment : PreferenceFragmentCompat() {
                         if (!hasSecureSettingsPermission()) {
                             Log.d(TAG, "WRITE_SECURE_SETTINGS permission not granted")
 
-                            // Check if the user previously chose automatic granting
-                            val pendingGrant = ShizukuSettings.getPreferences()
-                                .getBoolean(PENDING_SECURE_SETTINGS_GRANT, false)
-                            if (pendingGrant && Shizuku.pingBinder()) {
-                                try {
-                                    grantSecureSettingsWithShizuku()
+                            val grantPermission = tryToGrantSecureSettingsPermission()
 
-                                    if (hasSecureSettingsPermission()) {
-                                        ShizukuSettings.getPreferences().edit() {
-                                            putBoolean(PENDING_SECURE_SETTINGS_GRANT, false)
-                                        }
 
-                                        Toast.makeText(
-                                            requireContext(),
-                                            R.string.permission_granted,
-                                            Toast.LENGTH_SHORT
-                                        ).show()
+                            if (grantPermission) {
+                                // Disable the root option because of mutual exclusivity
+                                startOnBootPreference.isChecked = false
+                                savePreference(KEEP_START_ON_BOOT, false)
 
-                                        // Disable the root option because of mutual exclusivity
-                                        startOnBootPreference.isChecked = false
-                                        savePreference(KEEP_START_ON_BOOT, false)
-
-                                        return@OnPreferenceChangeListener toggleBootComponent(
-                                            ComponentName(
-                                                requireContext().packageName,
-                                                BootCompleteReceiver::class.java.name
-                                            ), KEEP_START_ON_BOOT_WIRELESS, true
-                                        )
-                                    }
-                                } catch (e: Exception) {
-                                    Log.e(TAG, "Error auto-granting permission", e)
-                                }
+                                return@OnPreferenceChangeListener toggleBootComponent(
+                                    ComponentName(
+                                        requireContext().packageName,
+                                        BootCompleteReceiver::class.java.name
+                                    ), KEEP_START_ON_BOOT_WIRELESS, true
+                                )
                             }
+
                             showSecureSettingsPermissionDialog()
                             return@OnPreferenceChangeListener false
                         }
@@ -162,9 +149,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
                     toggleBootComponent(
                         ComponentName(
                             requireContext().packageName, BootCompleteReceiver::class.java.name
-                        ),
-                        KEEP_START_ON_BOOT_WIRELESS,
-                        newValue
+                        ), KEEP_START_ON_BOOT_WIRELESS, newValue
                     )
                 } else false
             }
@@ -268,26 +253,13 @@ class SettingsFragment : PreferenceFragmentCompat() {
     override fun onResume() {
         super.onResume()
 
-        val pendingGrant =
-            ShizukuSettings.getPreferences().getBoolean(PENDING_SECURE_SETTINGS_GRANT, false)
+        tryToGrantSecureSettingsPermission()
 
-        if (pendingGrant && Shizuku.pingBinder()) {
-            try {
-                grantSecureSettingsWithShizuku()
-
-                if (hasSecureSettingsPermission()) {
-                    ShizukuSettings.getPreferences().edit() {
-                        putBoolean(PENDING_SECURE_SETTINGS_GRANT, false)
-                    }
-
-                    Toast.makeText(
-                        requireContext(), R.string.permission_granted, Toast.LENGTH_SHORT
-                    ).show()
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to grant permission on resume", e)
-            }
-        }
+        updatePreferenceStates(
+            ComponentName(
+                requireContext().packageName, BootCompleteReceiver::class.java.name
+            )
+        )
     }
 
     private fun setupLocalePreference() {
@@ -388,57 +360,57 @@ class SettingsFragment : PreferenceFragmentCompat() {
         val context = requireContext()
 
         MaterialAlertDialogBuilder(context).setTitle(R.string.permission_required).setMessage(
-                HtmlCompat.fromHtml(
-                    """
+            HtmlCompat.fromHtml(
+                """
                 <p>${getString(R.string.permission_write_secure_settings_required)}</p>
                 <h3>Warning</h3>
                 <p><tt>WRITE_SECURE_SETTINGS</tt> is a very sensitive permission and enable it only if you know what you're doing as the permission allows the application to read or write the secure system settings.</p>
                 """.trimIndent()
+            )
+        ).setPositiveButton(R.string.permission_grant_automatically) { _, _ ->
+            ShizukuSettings.getPreferences().edit() {
+                putBoolean(
+                    PENDING_SECURE_SETTINGS_GRANT, true
                 )
-            ).setPositiveButton(R.string.permission_grant_automatically) { _, _ ->
-                ShizukuSettings.getPreferences().edit() {
-                    putBoolean(
-                        PENDING_SECURE_SETTINGS_GRANT, true
-                    )
-                }
+            }
 
-                if (!Shizuku.pingBinder()) {
-                    Toast.makeText(
-                        context, R.string.start_shizuku_first, Toast.LENGTH_LONG
-                    ).show()
+            if (!Shizuku.pingBinder()) {
+                Toast.makeText(
+                    context, R.string.start_shizuku_first, Toast.LENGTH_LONG
+                ).show()
 
-                    // Return to main screen
-                    activity?.onBackPressedDispatcher?.onBackPressed()
-                    return@setPositiveButton
-                }
+                // Return to main screen
+                activity?.onBackPressedDispatcher?.onBackPressed()
+                return@setPositiveButton
+            }
 
-                try {
-                    grantSecureSettingsWithShizuku()
+            try {
+                grantSecureSettingsWithShizuku()
 
-                    if (hasSecureSettingsPermission()) {
-                        ShizukuSettings.getPreferences().edit() {
-                            putBoolean(
-                                PENDING_SECURE_SETTINGS_GRANT, false
-                            )
-                        }
-
-                        Toast.makeText(
-                            context, R.string.permission_granted, Toast.LENGTH_SHORT
-                        ).show()
-                    } else {
-                        Toast.makeText(
-                            context, R.string.permission_grant_failed, Toast.LENGTH_SHORT
-                        ).show()
+                if (hasSecureSettingsPermission()) {
+                    ShizukuSettings.getPreferences().edit() {
+                        putBoolean(
+                            PENDING_SECURE_SETTINGS_GRANT, false
+                        )
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to grant permission", e)
+
+                    Toast.makeText(
+                        context, R.string.permission_granted, Toast.LENGTH_SHORT
+                    ).show()
+                } else {
                     Toast.makeText(
                         context, R.string.permission_grant_failed, Toast.LENGTH_SHORT
                     ).show()
                 }
-            }.setNegativeButton(R.string.permission_grant_manually) { _, _ ->
-                showAdbInstructionsDialog()
-            }.setNeutralButton(android.R.string.cancel, null).show()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to grant permission", e)
+                Toast.makeText(
+                    context, R.string.permission_grant_failed, Toast.LENGTH_SHORT
+                ).show()
+            }
+        }.setNegativeButton(R.string.permission_grant_manually) { _, _ ->
+            showAdbInstructionsDialog()
+        }.setNeutralButton(android.R.string.cancel, null).show()
     }
 
     private fun showAdbInstructionsDialog() {
@@ -478,18 +450,61 @@ class SettingsFragment : PreferenceFragmentCompat() {
         ) == PackageManager.PERMISSION_GRANTED
     }
 
+    private fun tryToGrantSecureSettingsPermission(): Boolean {
+        if (hasSecureSettingsPermission()) {
+            return true
+        }
+
+        val pendingGrant =
+            ShizukuSettings.getPreferences().getBoolean(PENDING_SECURE_SETTINGS_GRANT, false)
+        if (pendingGrant && Shizuku.pingBinder()) {
+            try {
+                val success = kotlin.runCatching {
+                    grantSecureSettingsWithShizuku()
+                    Thread.sleep(100)
+                    hasSecureSettingsPermission()
+                }.getOrElse { e ->
+                    Log.e(TAG, "Error auto-granting permission", e)
+                    false
+                }
+
+                if (success) {
+                    ShizukuSettings.getPreferences().edit {
+                        putBoolean(PENDING_SECURE_SETTINGS_GRANT, false)
+                    }
+
+                    activity?.runOnUiThread {
+                        Toast.makeText(
+                            requireContext(), R.string.permission_granted, Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    return true
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to grant permission", e)
+            }
+        }
+        return false
+    }
+
     private fun grantSecureSettingsWithShizuku() {
         try {
             if (!Shizuku.pingBinder()) {
                 Log.w(TAG, "Shizuku service not available")
-                return
+                throw IllegalStateException("Shizuku service not available")
             }
 
+            val uid = Process.myUid()
+            val userHandle = UserHandle.getUserHandleForUid(uid)
+            val userId = userHandle.toString().replace("UserHandle{", "").replace("}", "").toInt()
+
+            Log.i(TAG, "Attempting to grant WRITE_SECURE_SETTINGS for user ID: $userId (UID: $uid)")
+
             ShizukuSystemApis.grantRuntimePermission(
-                BuildConfig.APPLICATION_ID, Manifest.permission.WRITE_SECURE_SETTINGS, 0
+                BuildConfig.APPLICATION_ID, Manifest.permission.WRITE_SECURE_SETTINGS, userId
             )
 
-            Thread.sleep(100)
+            Log.i(TAG, "Requested WRITE_SECURE_SETTINGS grant via Shizuku for user $userId")
         } catch (e: Exception) {
             Log.e(TAG, "Error granting permission via Shizuku", e)
             throw e
