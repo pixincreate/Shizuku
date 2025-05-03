@@ -465,7 +465,6 @@ class SettingsFragment : PreferenceFragmentCompat() {
             try {
                 val success = kotlin.runCatching {
                     grantSecureSettingsWithShizuku()
-                    Thread.sleep(200)
                     hasSecureSettingsPermission()
                 }.onFailure { e ->
                     Log.e(TAG, "Error auto-granting permission", e)
@@ -514,6 +513,8 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 BuildConfig.APPLICATION_ID, Manifest.permission.WRITE_SECURE_SETTINGS, userId
             )
 
+            Thread.sleep(200)
+            
             Log.i(TAG, "Requested WRITE_SECURE_SETTINGS grant via Shizuku for user $userId")
         } catch (e: Exception) {
             Log.e(TAG, "Error granting permission via Shizuku", e)
