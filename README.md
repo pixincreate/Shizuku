@@ -1,5 +1,13 @@
 # Shizuku
 
+> [!IMPORTANT]
+> **DEPRECATION NOTICE**
+>
+> This project is no longer actively maintained.
+>
+> For an up-to-date and feature-rich alternative, please use:
+> https://github.com/thedjchi/Shizuku
+
 ## Disclaimer
 
 THIS IS A **FORK** OF SHIZUKU. IF YOU'RE LOOKING FOR SHIZUKU FROM RIKKA, THIS IS NOT THE PLACE.
